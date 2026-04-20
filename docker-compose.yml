@@ -1,0 +1,11 @@
+services:
+  openclaw:
+    image: ghcr.io/openclaw/openclaw:latest
+    volumes:
+      - .:/app/workspace
+      - ./.openclaw:/home/node/.openclaw
+    ports:
+      - "18789:18789"
+    env_file:
+      - .env
+    restart: unless-stopped
