@@ -1,6 +1,6 @@
 services:
   openclaw:
-    image: ghcr.io/openclaw/openclaw:latest
+    build: .
     volumes:
       - .:/app/workspace
       - ./.openclaw:/home/node/.openclaw
