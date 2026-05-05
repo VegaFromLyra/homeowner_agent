@@ -2,8 +2,27 @@
 set -euo pipefail
 IFS=$'\n\t'
 
+# Allowed domains — dnsmasq will auto-add resolved IPs to the ipset
+ALLOWED_DOMAINS=(
+    "api.anthropic.com"
+    "sentry.io"
+    "statsig.anthropic.com"
+    "statsig.com"
+    "angi.com"
+    "www.angi.com"
+    "api.angi.com"
+    "request.angi.com"
+    "lpfe-static-assets.angi.com"
+    "cdn.playwright.dev"
+    "playwright.download.prss.microsoft.com"
+    "sdk.split.io"
+    "auth.split.io"
+)
+
 # 1. Extract Docker DNS info BEFORE any flushing
 DOCKER_DNS_RULES=$(iptables-save -t nat | grep "127\.0\.0\.11" || true)
+# Get Docker's upstream DNS server
+DOCKER_DNS=$(grep nameserver /etc/resolv.conf | head -1 | awk '{print $2}')
 
 # Flush existing rules and delete existing ipsets
 iptables -F
@@ -24,9 +43,10 @@ else
     echo "No Docker DNS rules to restore"
 fi
 
-# Allow DNS
+# Allow DNS (to Docker's DNS and localhost for dnsmasq)
 iptables -A OUTPUT -p udp --dport 53 -j ACCEPT
 iptables -A INPUT -p udp --sport 53 -j ACCEPT
+iptables -A INPUT -p udp --dport 53 -j ACCEPT
 # Allow SSH
 iptables -A OUTPUT -p tcp --dport 22 -j ACCEPT
 iptables -A INPUT -p tcp --sport 22 -m state --state ESTABLISHED -j ACCEPT
@@ -35,39 +55,41 @@ iptables -A INPUT -i lo -j ACCEPT
 iptables -A OUTPUT -o lo -j ACCEPT
 
 # Create ipset for allowed domains
-ipset create allowed-domains hash:net
+ipset create allowed-domains hash:ip
 
-# Resolve and add allowed domains
-ALLOWED_DOMAINS=(
-    "api.anthropic.com"
-    "sentry.io"
-    "statsig.anthropic.com"
-    "statsig.com"
-    "angi.com"
-    "www.angi.com"
-    "api.angi.com"
-    "request.angi.com"
-    "lpfe-static-assets.angi.com"
-    "cdn.playwright.dev"
-    "playwright.download.prss.microsoft.com"
-    "sdk.split.io"
-    "auth.split.io"
-)
+# 3. Configure dnsmasq as local DNS proxy with ipset integration
+# Every DNS lookup for an allowed domain automatically adds the resolved IP to the ipset
+DNSMASQ_CONF="/etc/dnsmasq.d/firewall.conf"
+mkdir -p /etc/dnsmasq.d
 
+{
+    echo "# Forward to Docker's upstream DNS"
+    echo "server=${DOCKER_DNS}"
+    echo "no-resolv"
+    echo "listen-address=127.0.0.1"
+    echo "bind-interfaces"
+    echo "cache-size=1000"
+    echo ""
+    echo "# Auto-add resolved IPs to ipset for allowed domains"
+    for domain in "${ALLOWED_DOMAINS[@]}"; do
+        echo "ipset=/${domain}/allowed-domains"
+    done
+} > "$DNSMASQ_CONF"
+
+# Start dnsmasq
+echo "Starting dnsmasq..."
+dnsmasq --conf-file="$DNSMASQ_CONF"
+
+# Point the container's DNS at local dnsmasq
+echo "nameserver 127.0.0.1" > /etc/resolv.conf
+
+# 4. Seed the ipset by resolving all domains once through dnsmasq
 for domain in "${ALLOWED_DOMAINS[@]}"; do
-    echo "Resolving $domain..."
-    ips=$(dig +noall +answer A "$domain" | awk '$4 == "A" {print $5}')
-    if [ -z "$ips" ]; then
-        echo "WARNING: Failed to resolve $domain, skipping"
-        continue
-    fi
-    while read -r ip; do
-        if [[ "$ip" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
-            echo "Adding $ip for $domain"
-            ipset add allowed-domains "$ip" 2>/dev/null || true
-        fi
-    done <<< "$ips"
+    echo "Seeding $domain..."
+    dig +noall +answer A "$domain" @127.0.0.1 > /dev/null 2>&1 || true
 done
+
+echo "Seeded ipset with $(ipset list allowed-domains | grep -c '^[0-9]' || echo 0) IPs"
 
 # Allow host network (for Docker-to-host communication)
 HOST_IP=$(ip route | grep default | cut -d" " -f3)
@@ -93,7 +115,7 @@ iptables -A OUTPUT -m set --match-set allowed-domains dst -j ACCEPT
 # Reject everything else with immediate feedback
 iptables -A OUTPUT -j REJECT --reject-with icmp-admin-prohibited
 
-echo "Firewall configuration complete"
+echo "Firewall configuration complete (dnsmasq-backed)"
 
 # Verify: blocked domain should fail
 if curl --connect-timeout 5 https://example.com >/dev/null 2>&1; then

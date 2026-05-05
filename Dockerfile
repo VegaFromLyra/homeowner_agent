@@ -3,7 +3,7 @@ FROM ghcr.io/openclaw/openclaw:latest
 USER root
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    iptables ipset iproute2 dnsutils jq \
+    iptables ipset iproute2 dnsutils jq dnsmasq \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 RUN npx playwright install --with-deps chromium
