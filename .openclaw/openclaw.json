@@ -1,0 +1,76 @@
+{
+  "gateway": {
+    "auth": {
+      "mode": "token",
+      "token": "adabce4888df6a024474d92614265136dbd4dd6a38c06929"
+    },
+    "controlUi": {
+      "allowInsecureAuth": true
+    },
+    "mode": "local",
+    "port": 18789,
+    "bind": "all",
+    "tailscale": {
+      "mode": "off",
+      "resetOnExit": false
+    },
+    "nodes": {
+      "denyCommands": [
+        "camera.snap",
+        "camera.clip",
+        "screen.record",
+        "contacts.add",
+        "calendar.add",
+        "reminders.add",
+        "sms.send",
+        "sms.search"
+      ]
+    }
+  },
+  "agents": {
+    "defaults": {
+      "workspace": "/home/node/.openclaw/workspace",
+      "models": {
+        "anthropic/claude-sonnet-4-6": {}
+      },
+      "model": {
+        "primary": "anthropic/claude-sonnet-4-6"
+      }
+    }
+  },
+  "session": {
+    "dmScope": "per-channel-peer"
+  },
+  "tools": {
+    "profile": "coding"
+  },
+  "auth": {
+    "profiles": {
+      "anthropic:default": {
+        "provider": "anthropic",
+        "mode": "api_key"
+      }
+    }
+  },
+  "channels": {
+    "whatsapp": {
+      "selfChatMode": true,
+      "dmPolicy": "allowlist",
+      "allowFrom": [
+        "+4258945053"
+      ],
+      "enabled": true
+    }
+  },
+  "meta": {
+    "lastTouchedVersion": "2026.4.14",
+    "lastTouchedAt": "2026-05-09T16:49:32.890Z"
+  },
+  "plugins": {
+    "entries": {
+      "anthropic": {
+        "enabled": true
+      }
+    }
+  }
+}
