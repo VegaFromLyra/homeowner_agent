@@ -1,2 +1,4 @@
 .env
-.openclaw/
+.claude/settings.local.json
+.openclaw/*
+!.openclaw/openclaw.json
