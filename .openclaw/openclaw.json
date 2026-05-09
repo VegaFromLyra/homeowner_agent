@@ -9,7 +9,7 @@
     },
     "mode": "local",
     "port": 18789,
-    "bind": "all",
+    "bind": "lan",
     "tailscale": {
       "mode": "off",
       "resetOnExit": false
