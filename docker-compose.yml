@@ -4,6 +4,7 @@ services:
     volumes:
       - .:/app/workspace
       - ./.openclaw:/home/node/.openclaw
+      - ./skills:/app/skills
     ports:
       - "18789:18789"
     env_file:
